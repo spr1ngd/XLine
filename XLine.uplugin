@@ -1,0 +1,24 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "XLine",
+	"Description": "line",
+	"Category": "Other",
+	"CreatedBy": "spring",
+	"CreatedByURL": "github.com/spr1ngd",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"CanContainContent": true,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "XLine",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	]
+}

@@ -1,0 +1,14 @@
+{
+	"RemapUnityFiles": 
+	{
+		"Module.XLine.cpp.obj": [
+			"XLine.gen.cpp.obj",
+			"XLine.init.gen.cpp.obj",
+			"XLineComponent.gen.cpp.obj",
+			"XLine.cpp.obj",
+			"XLineComponent.cpp.obj",
+			"XLineModule.cpp.obj",
+			"XLineSceneProxy.cpp.obj"
+		]
+	}
+}
