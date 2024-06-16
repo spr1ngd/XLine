@@ -9,4 +9,7 @@ class UXLineComponent : public UStaticMeshComponent
 	
 public:
 	virtual FPrimitiveSceneProxy* CreateSceneProxy() override;
+
+	UFUNCTION()
+	void SetPoints(const TArray<FVector>& Points);
 };

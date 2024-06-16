@@ -9,6 +9,13 @@ public:
 	FXLineSceneProxy(UXLineComponent* PrimitiveComponent);
 	virtual ~FXLineSceneProxy();
 
-	virtual void GetDynamicMeshElements(const TArray<const FSceneView*>& Views, const FSceneViewFamily& ViewFamily, uint32 VisibilityMap, FMeshElementCollector& Collector) const override;
+	virtual void DrawStaticElements(FStaticPrimitiveDrawInterface* PDI) override;
 	virtual FPrimitiveViewRelevance GetViewRelevance(const FSceneView* View) const override;
+
+	virtual SIZE_T GetTypeHash() const override;
+	virtual uint32 GetMemoryFootprint() const override;
+
+private:
+
+	FStaticMeshRenderData* RenderData;
 };
