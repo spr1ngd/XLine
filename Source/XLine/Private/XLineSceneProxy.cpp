@@ -57,7 +57,23 @@ void FXLineSceneProxy::DrawStaticElements(FStaticPrimitiveDrawInterface* PDI)
 
 FPrimitiveViewRelevance FXLineSceneProxy::GetViewRelevance(const FSceneView* View) const
 {
-	return FPrimitiveSceneProxy::GetViewRelevance(View);
+	checkSlow(IsInParallelRenderingThread());
+	FPrimitiveViewRelevance Result;
+	Result.bDrawRelevance = IsShown(View) && View->Family->EngineShowFlags.StaticMeshes;
+	Result.bStaticRelevance = true;
+	Result.bDynamicRelevance = false;
+	Result.bRenderCustomDepth = ShouldRenderCustomDepth();
+	Result.bRenderInMainPass = ShouldRenderInMainPass();
+	Result.bRenderInDepthPass = ShouldRenderInDepthPass();
+	Result.bUsesLightingChannels = false;
+	Result.bTranslucentSelfShadow = false;
+	Result.bShadowRelevance = false;
+	Result.bVelocityRelevance = DrawsVelocity() && Result.bOpaque && Result.bRenderInMainPass;
+	if (!View->Family->EngineShowFlags.Materials)
+	{
+		Result.bOpaque = true;
+	}
+	return Result;
 }
 
 SIZE_T FXLineSceneProxy::GetTypeHash() const
