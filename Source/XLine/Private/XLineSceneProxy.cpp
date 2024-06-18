@@ -14,11 +14,6 @@ FXLineSceneProxy::~FXLineSceneProxy()
 	
 }
 
-void GetMeshElement()
-{
-	
-}
-
 void FXLineSceneProxy::DrawStaticElements(FStaticPrimitiveDrawInterface* PDI)
 {
 	checkSlow(IsInParallelRenderingThread());
@@ -26,7 +21,8 @@ void FXLineSceneProxy::DrawStaticElements(FStaticPrimitiveDrawInterface* PDI)
 	{
 		const int32 ForceLODIndex = 0;
 		const FStaticMeshLODResources& LODResource = RenderData->LODResources[ForceLODIndex];
-		const FStaticMeshVertexFactories& VFs      = RenderData->LODVertexFactories[ForceLODIndex];
+		const FStaticMeshVertexFactories& XLineVFs = RenderData->LODVertexFactories[ForceLODIndex];
+		const FLocalVertexFactory& VertexFactory = XLineVFs.VertexFactory;
 		
 		const int32 SectionNums = LODResource.Sections.Num();
 		for( int32 SectionIndex = 0; SectionIndex < SectionNums; SectionIndex++ )
@@ -45,11 +41,12 @@ void FXLineSceneProxy::DrawStaticElements(FStaticPrimitiveDrawInterface* PDI)
 #if WITH_EDITORONLY_DATA
 				
 #endif
+				MeshBatchElement.UserData = VertexFactory.GetPositionsSRV();
 				MeshBatchElement.FirstIndex = Section.FirstIndex;
 				MeshBatchElement.IndexBuffer = &LODResource.IndexBuffer;
 				MeshBatchElement.NumPrimitives = Section.NumTriangles;
 			}
-			MeshBatch.VertexFactory = &VFs.VertexFactory;
+			MeshBatch.VertexFactory = &XLineVFs.VertexFactory;
 			PDI->DrawMesh(MeshBatch, FLT_MAX);
 		}
 	}

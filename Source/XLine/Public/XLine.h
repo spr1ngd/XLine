@@ -10,4 +10,7 @@ public:
 
 	virtual void BeginPlay() override;
 	virtual void BeginDestroy() override;
+
+	UFUNCTION()
+	void SetPoints(const TArray<FVector>& Points);
 };
