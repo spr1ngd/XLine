@@ -18,5 +18,7 @@ public:
 	UFUNCTION()
 	void SetPoints(const TArray<FVector>& Points);
 
+	virtual void PostLoad() override;
+
 	static FName XLineComponentName;
 };

@@ -9,6 +9,9 @@ class UXLineComponent : public UStaticMeshComponent
 	
 public:
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UMaterialInterface* Material;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	TArray<FVector> MetaPoints;
 
@@ -26,8 +29,4 @@ public:
 #if WITH_EDITOR
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 #endif
-
-private:
-
-	void InitResources();
 };

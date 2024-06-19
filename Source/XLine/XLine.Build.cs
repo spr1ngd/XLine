@@ -40,6 +40,7 @@ public class XLine : ModuleRules
 				"Engine",
 				"Slate",
 				"SlateCore",
+				"RHI"
 				// ... add private dependencies that you statically link with here ...	
 			}
 			);

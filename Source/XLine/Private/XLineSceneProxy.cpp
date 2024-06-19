@@ -1,10 +1,13 @@
 ﻿#include "XLineSceneProxy.h"
 #include "XLineComponent.h"
 #include "XLineModule.h"
+#include "MaterialDomain.h"
 
-FXLineSceneProxy::FXLineSceneProxy(UXLineComponent* PrimitiveComponent)
+FXLineSceneProxy::FXLineSceneProxy(UXLineComponent* PrimitiveComponent, ERHIFeatureLevel::Type InFeatureLevel)
 	: FPrimitiveSceneProxy(PrimitiveComponent)
 	, RenderData(PrimitiveComponent->GetStaticMesh()->GetRenderData())
+	, XLineVertexFactory(InFeatureLevel)
+	, Material(PrimitiveComponent->Material)
 {
 	
 }
@@ -21,8 +24,7 @@ void FXLineSceneProxy::DrawStaticElements(FStaticPrimitiveDrawInterface* PDI)
 	{
 		const int32 ForceLODIndex = 0;
 		const FStaticMeshLODResources& LODResource = RenderData->LODResources[ForceLODIndex];
-		const FStaticMeshVertexFactories& XLineVFs = RenderData->LODVertexFactories[ForceLODIndex];
-		const FLocalVertexFactory& VertexFactory = XLineVFs.VertexFactory;
+		const FLocalVertexFactory& VertexFactory = XLineVertexFactory;
 		
 		const int32 SectionNums = LODResource.Sections.Num();
 		for( int32 SectionIndex = 0; SectionIndex < SectionNums; SectionIndex++ )
@@ -34,19 +36,31 @@ void FXLineSceneProxy::DrawStaticElements(FStaticPrimitiveDrawInterface* PDI)
 				continue;
 			}
 			FMeshBatch MeshBatch;
+			MeshBatch.LODIndex = 0;
 			MeshBatch.Type = PT_TriangleList;
 			// create mesh batch element
 			{
 				FMeshBatchElement& MeshBatchElement = MeshBatch.Elements[0];
-#if WITH_EDITORONLY_DATA
-				
-#endif
 				// MeshBatchElement.UserData = VertexFactory.GetPositionsSRV();
 				MeshBatchElement.FirstIndex = Section.FirstIndex;
 				MeshBatchElement.IndexBuffer = &LODResource.IndexBuffer;
 				MeshBatchElement.NumPrimitives = Section.NumTriangles;
 			}
-			MeshBatch.VertexFactory = &XLineVFs.VertexFactory;
+			// material render proxy
+			{
+				MeshBatch.MaterialRenderProxy = Material->GetRenderProxy() == nullptr
+					? UMaterial::GetDefaultMaterial(MD_Surface)->GetRenderProxy()
+					: Material->GetRenderProxy();
+			}
+			// MeshBatch.ReverseCulling = IsLocalToWorldDeterminantNegative();
+			// MeshBatch.DepthPriorityGroup = SDPG_World;
+			// MeshBatch.bCanApplyViewModeOverrides = false;
+			// MeshBatch.bDisableBackfaceCulling = false;
+			// MeshBatch.CastShadow = false;
+			// MeshBatch.bUseAsOccluder = false;
+			// MeshBatch.bWireframe = false;
+			
+			MeshBatch.VertexFactory = &VertexFactory;
 			PDI->DrawMesh(MeshBatch, FLT_MAX);
 		}
 	}
@@ -82,4 +96,14 @@ SIZE_T FXLineSceneProxy::GetTypeHash() const
 uint32 FXLineSceneProxy::GetMemoryFootprint() const
 {
 	return( sizeof( *this ) + GetAllocatedSize() );
+}
+
+void FXLineSceneProxy::CreateRenderThreadResources()
+{
+	XLineVertexFactory.InitResource();
+}
+
+void FXLineSceneProxy::DestroyRenderThreadResources()
+{
+	XLineVertexFactory.ReleaseResource();
 }

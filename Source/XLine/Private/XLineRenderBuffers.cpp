@@ -35,7 +35,7 @@ private:
 	LAYOUT_FIELD(FShaderResourceParameter, PositionBuffer);
 };
 
-FXLineVertexFactory::FXLineVertexFactory(ERHIFeatureLevel::Type InFeatureLevel, const FPositionVertexBuffer* PositionVertexBuffer)
+FXLineVertexFactory::FXLineVertexFactory(ERHIFeatureLevel::Type InFeatureLevel)
 	: FLocalVertexFactory(InFeatureLevel, "FXLineVertexFactory")
 {
 	

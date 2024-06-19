@@ -10,7 +10,7 @@ class FXLineVertexFactory : public FLocalVertexFactory
 	DECLARE_VERTEX_FACTORY_TYPE(FXLineVertexFactory);
 
 public:
-	FXLineVertexFactory(ERHIFeatureLevel::Type InFeatureLevel, const FPositionVertexBuffer* PositionVertexBuffer);
+	FXLineVertexFactory(ERHIFeatureLevel::Type InFeatureLevel);
 
 	static bool ShouldCompilePermutation(const FVertexFactoryShaderPermutationParameters& Paramters);
 	

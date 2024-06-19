@@ -6,6 +6,18 @@ UXLineComponent::UXLineComponent(const FObjectInitializer& ObjectInitializer) : 
 {
 	PrimaryComponentTick.bCanEverTick = false;
 	SetCollisionProfileName(UCollisionProfile::NoCollision_ProfileName);
+
+	{
+		static ConstructorHelpers::FObjectFinder<UMaterialInterface> DefaultMaterial(TEXT("/XLine/M_XLine"));
+		Material = DefaultMaterial.Object;
+	}
+
+#if WITH_EDITOR
+	{
+		MetaPoints.Emplace(FVector3f::ZeroVector);
+		MetaPoints.Emplace(FVector3f::ForwardVector * 100.0f);
+	}
+#endif
 }
 
 UXLineComponent::~UXLineComponent()
@@ -47,7 +59,7 @@ FPrimitiveSceneProxy* UXLineComponent::CreateSceneProxy()
 		return nullptr;
 	}
 
-	return new FXLineSceneProxy(this);
+	return new FXLineSceneProxy(this, GMaxRHIFeatureLevel);
 }
 
 void UXLineComponent::SetPoints(const TArray<FVector>& Points)
@@ -74,10 +86,12 @@ void UXLineComponent::UpdateLine()
 		for( int32 Idx = 0; Idx < MetaPoints.Num(); Idx++ )
 		{
 			FStaticMeshBuildVertex Vertex;
-			Vertex.Position = FVector3f(MetaPoints[Idx]);
-			// todo: other vertex datas
+			Vertex.Position = FVector3f(MetaPoints[Idx]) + FVector3f(0, 0, 100);
 			StaticMeshBuildVertices[Idx * 2] = Vertex;
-			StaticMeshBuildVertices[Idx * 2 + 1] = MoveTemp(Vertex);
+
+			FStaticMeshBuildVertex Vertex2;
+			Vertex2.Position = FVector3f(MetaPoints[Idx]) + FVector3f(0, 0, -100);
+			StaticMeshBuildVertices[Idx * 2 + 1] = Vertex2;
 		}
 
 		// vertex layout
@@ -100,11 +114,24 @@ void UXLineComponent::UpdateLine()
 	const int32 LODNum = 1;
 	FStaticMeshRenderData* RenderData = new FStaticMeshRenderData();
 	RenderData->AllocateLODResources(LODNum);
+	{
+		// use custom vertex factory
+		// RenderData->LODVertexFactories[0].VertexFactory = FXLineVertexFactory(GMaxRHIFeatureLevel, &RenderData->LODResources[0].VertexBuffers.PositionVertexBuffer);
+		// RenderData->LODVertexFactories[0].SplineVertexFactory = new FXLineVertexFactory(GMaxRHIFeatureLevel, &RenderData->LODResources[0].VertexBuffers.PositionVertexBuffer);
+	}
 	FStaticMeshLODResources& LOD = RenderData->LODResources[0];
 	LOD.VertexBuffers.StaticMeshVertexBuffer.SetUseFullPrecisionUVs(true);
 	LOD.VertexBuffers.PositionVertexBuffer.Init(StaticMeshBuildVertices, false);
 	const int32 InNumTexCoords = 1;
 	LOD.VertexBuffers.StaticMeshVertexBuffer.Init(StaticMeshBuildVertices, InNumTexCoords, false);
+
+	// index buffer
+	{
+		LOD.IndexBuffer.SetIndices(StaticMeshIndices,
+			StaticMeshBuildVertices.Num() >= std::numeric_limits<uint16>::max()
+				? EIndexBufferStride::Type::Force32Bit
+				: EIndexBufferStride::Type::Force16Bit);
+	}
 
 	FStaticMeshSectionArray& Sections = LOD.Sections;
     FStaticMeshSection& Section = Sections.AddDefaulted_GetRef();
@@ -122,7 +149,6 @@ void UXLineComponent::UpdateLine()
 		LineMesh->SetFlags(RF_Transient | RF_DuplicateTransient);
 		LineMesh->NaniteSettings.bEnabled = false;
 		LineMesh->SetRenderData(TUniquePtr<FStaticMeshRenderData>(RenderData));
-		UMaterialInterface* Material = nullptr;
 		LineMesh->AddMaterial(Material);
 		LineMesh->InitResources();
 		LineMesh->CalculateExtendedBounds();
@@ -135,13 +161,7 @@ void UXLineComponent::UpdateLine()
 void UXLineComponent::PostLoad()
 {
 	Super::PostLoad();
-
-	InitResources();
-}
-
-void UXLineComponent::InitResources()
-{
-	
+	this->UpdateLine();
 }
 
 #if WITH_EDITOR
