@@ -1,5 +1,17 @@
 ﻿#include "XLineComponent.h"
+#include "XLineModule.h"
 #include "XLineSceneProxy.h"
+
+UXLineComponent::UXLineComponent(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
+{
+	PrimaryComponentTick.bCanEverTick = false;
+	SetCollisionProfileName(UCollisionProfile::NoCollision_ProfileName);
+}
+
+UXLineComponent::~UXLineComponent()
+{
+	
+}
 
 FPrimitiveSceneProxy* UXLineComponent::CreateSceneProxy()
 {
@@ -40,17 +52,29 @@ FPrimitiveSceneProxy* UXLineComponent::CreateSceneProxy()
 
 void UXLineComponent::SetPoints(const TArray<FVector>& Points)
 {
+	this->MetaPoints = Points;
+	this->UpdateLine();
+}
+
+void UXLineComponent::UpdateLine()
+{
+	if( MetaPoints.Num() < 2 )
+	{
+		UE_LOG(LogXLine, Warning, TEXT("Points number of XLine could not less than 2."));
+		return;
+	}
+	
 	TArray<FStaticMeshBuildVertex> StaticMeshBuildVertices;
-	StaticMeshBuildVertices.SetNumUninitialized(Points.Num() * 2);
+	StaticMeshBuildVertices.SetNumUninitialized(MetaPoints.Num() * 2);
 	TArray<uint32> StaticMeshIndices;
-	StaticMeshIndices.SetNumZeroed((Points.Num() - 1) * 4);
+	StaticMeshIndices.SetNumZeroed((MetaPoints.Num() - 1) * 6);
 	
 	// generate x-line vertices
 	{
-		for( int32 Idx = 0; Idx < Points.Num(); Idx++ )
+		for( int32 Idx = 0; Idx < MetaPoints.Num(); Idx++ )
 		{
 			FStaticMeshBuildVertex Vertex;
-			Vertex.Position = FVector3f(Points[Idx]);
+			Vertex.Position = FVector3f(MetaPoints[Idx]);
 			// todo: other vertex datas
 			StaticMeshBuildVertices[Idx * 2] = Vertex;
 			StaticMeshBuildVertices[Idx * 2 + 1] = MoveTemp(Vertex);
@@ -60,7 +84,7 @@ void UXLineComponent::SetPoints(const TArray<FVector>& Points)
 		// 0 --- 2
 		// |  x  |
 		// 1 --- 3
-		for( int32 Idx = 0; Idx < Points.Num() - 1; Idx++ )
+		for( int32 Idx = 0; Idx < MetaPoints.Num() - 1; Idx++ )
 		{
 			const int32 BaseIndex = Idx * 6;
 			const int32 BaseVertexIndex = Idx * 2;
@@ -91,9 +115,50 @@ void UXLineComponent::SetPoints(const TArray<FVector>& Points)
 	Section.bEnableCollision = false;
 	Section.bCastShadow = false;
 	Section.MaterialIndex = 0;
+
+	UStaticMesh* LineMesh;
+	{
+		LineMesh = NewObject<UStaticMesh>(this);
+		LineMesh->SetFlags(RF_Transient | RF_DuplicateTransient);
+		LineMesh->NaniteSettings.bEnabled = false;
+		LineMesh->SetRenderData(TUniquePtr<FStaticMeshRenderData>(RenderData));
+		UMaterialInterface* Material = nullptr;
+		LineMesh->AddMaterial(Material);
+		LineMesh->InitResources();
+		LineMesh->CalculateExtendedBounds();
+		LineMesh->GetRenderData()->ScreenSize[0].Default = 1.0; // what's meaning ?
+	}
 	
-	UStaticMesh* NewStaticMesh = NewObject<UStaticMesh>(this);
-	NewStaticMesh->SetRenderData(TUniquePtr<FStaticMeshRenderData>(RenderData));
-	this->SetStaticMesh(NewStaticMesh);
+	this->SetStaticMesh(LineMesh);
 }
+
+void UXLineComponent::PostLoad()
+{
+	Super::PostLoad();
+
+	InitResources();
+}
+
+void UXLineComponent::InitResources()
+{
+	
+}
+
+#if WITH_EDITOR
+
+void UXLineComponent::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
+{
+	FProperty* PropertyThatChanged = PropertyChangedEvent.Property;
+	if( PropertyThatChanged )
+	{
+		auto PropertyName = PropertyThatChanged->GetName();
+		if( PropertyName == TEXT("MetaPoints") )
+		{
+			this->UpdateLine();
+		}
+	}
+	Super::PostEditChangeProperty(PropertyChangedEvent);
+}
+
+#endif
 

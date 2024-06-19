@@ -41,7 +41,7 @@ void FXLineSceneProxy::DrawStaticElements(FStaticPrimitiveDrawInterface* PDI)
 #if WITH_EDITORONLY_DATA
 				
 #endif
-				MeshBatchElement.UserData = VertexFactory.GetPositionsSRV();
+				// MeshBatchElement.UserData = VertexFactory.GetPositionsSRV();
 				MeshBatchElement.FirstIndex = Section.FirstIndex;
 				MeshBatchElement.IndexBuffer = &LODResource.IndexBuffer;
 				MeshBatchElement.NumPrimitives = Section.NumTriangles;
