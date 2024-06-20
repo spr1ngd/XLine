@@ -1,24 +1,17 @@
-﻿#pragma once
+// author : spr1ngd
+
+#pragma once
+
 #include "CoreMinimal.h"
-#include "XLine.generated.h"
+#include "Modules/ModuleManager.h"
 
-UCLASS(Blueprintable, BlueprintType)
-class AXLine : public AActor
+DECLARE_LOG_CATEGORY_EXTERN(LogXLine, Log, All);
+
+class FXLineModule : public IModuleInterface
 {
-	GENERATED_UCLASS_BODY()
-
 public:
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadWrite)
-	TObjectPtr<class UXLineComponent> XLineComponent;
-
-	virtual void BeginPlay() override;
-	virtual void BeginDestroy() override;
-
-	UFUNCTION()
-	void SetPoints(const TArray<FVector>& Points);
-
-	virtual void PostLoad() override;
-
-	static FName XLineComponentName;
+	/** IModuleInterface implementation */
+	virtual void StartupModule() override;
+	virtual void ShutdownModule() override;
 };

@@ -1,6 +1,6 @@
 ﻿#include "XLineSceneProxy.h"
 #include "XLineComponent.h"
-#include "XLineModule.h"
+#include "..\Public\XLine.h"
 #include "MaterialDomain.h"
 
 FXLineSceneProxy::FXLineSceneProxy(UXLineComponent* PrimitiveComponent, ERHIFeatureLevel::Type InFeatureLevel)

@@ -1,5 +1,5 @@
 ﻿#include "XLineComponent.h"
-#include "XLineModule.h"
+#include "..\Public\XLine.h"
 #include "XLineSceneProxy.h"
 
 UXLineComponent::UXLineComponent(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)

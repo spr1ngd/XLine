@@ -58,7 +58,8 @@ void FXLineVertexFactory::ReleaseRHI()
 
 IMPLEMENT_TYPE_LAYOUT(FXLineVertexFactoryShaderParameters);
 IMPLEMENT_VERTEX_FACTORY_PARAMETER_TYPE(FXLineVertexFactory, SF_Vertex, FXLineVertexFactoryShaderParameters);
-IMPLEMENT_VERTEX_FACTORY_TYPE(FXLineVertexFactory, "/XLine/Shaders/XLineVertexFactory.ush",
+IMPLEMENT_VERTEX_FACTORY_TYPE(
+	FXLineVertexFactory,
+	"/Plugin/XLine/Private/XLineVertexFactory.ush",
 	  EVertexFactoryFlags::UsedWithMaterials
-	| EVertexFactoryFlags::SupportsPositionOnly
-	| EVertexFactoryFlags::SupportsCachingMeshDrawCommands);
+	| EVertexFactoryFlags::SupportsPositionOnly );

@@ -1,40 +1,23 @@
-﻿#include "XLine.h"
-#include "XLineComponent.h"
+// Copyright Epic Games, Inc. All Rights Reserved.
 
-#define LOCTEXT_NAMESPACE "XLineActor"
-FName AXLine::XLineComponentName(TEXT("XLineComponent0"));
+#include "XLine.h"
+#include "Interfaces/IPluginManager.h"
 
-AXLine::AXLine( const FObjectInitializer& ObjectInitializer ) : Super(ObjectInitializer)
+#define LOCTEXT_NAMESPACE "FXLineModule"
+
+DEFINE_LOG_CATEGORY(LogXLine);
+
+void FXLineModule::StartupModule()
 {
-	SetCanBeDamaged(false);
-
-	XLineComponent = CreateDefaultSubobject<UXLineComponent>(XLineComponentName);
-	XLineComponent->SetCollisionProfileName(UCollisionProfile::NoCollision_ProfileName);
-	XLineComponent->Mobility = EComponentMobility::Movable;
-	XLineComponent->SetGenerateOverlapEvents(false);
-	XLineComponent->bUseDefaultCollision = false;
-	XLineComponent->RegisterComponent();
-
-	RootComponent = XLineComponent;
-	bCanBeInCluster = (GetClass() == AXLine::StaticClass());
+	FString PluginShaderDir = FPaths::Combine(IPluginManager::Get().FindPlugin(TEXT("XLine"))->GetBaseDir(), TEXT("Shaders"));
+	AddShaderSourceDirectoryMapping(TEXT("/Plugin/XLine"), PluginShaderDir);
 }
 
-void AXLine::BeginPlay()
+void FXLineModule::ShutdownModule()
 {
-	Super::BeginPlay();
+	
 }
 
-void AXLine::BeginDestroy()
-{
-	Super::BeginDestroy();
-}
-
-void AXLine::SetPoints(const TArray<FVector>& Points)
-{
-	// 每个位置多补一个点
-}
-
-void AXLine::PostLoad()
-{
-	Super::PostLoad();
-}
+#undef LOCTEXT_NAMESPACE
+	
+IMPLEMENT_MODULE(FXLineModule, XLine)
