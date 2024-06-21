@@ -2,7 +2,8 @@
 
 struct FXLineBatchElementUserData
 {
-	FRHIShaderResourceView* PositionBuffer;	
+	FRHIShaderResourceView* PositionBuffer;
+	uint32 VertexNums;
 };
 
 class FXLineVertexFactory : public FLocalVertexFactory
@@ -12,7 +13,9 @@ class FXLineVertexFactory : public FLocalVertexFactory
 public:
 	FXLineVertexFactory(ERHIFeatureLevel::Type InFeatureLevel);
 
-	static bool ShouldCompilePermutation(const FVertexFactoryShaderPermutationParameters& Paramters);
+	void InitVertexFactory( const FStaticMeshLODResources* LODResources );
+	static bool ShouldCompilePermutation(const FVertexFactoryShaderPermutationParameters& Parameters);
+	static void ModifyCompilationEnvironment( const FVertexFactoryShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment );
 	
 private:
 

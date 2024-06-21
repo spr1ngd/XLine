@@ -18,11 +18,13 @@ public:
 
 protected:
 
+	
 	virtual void CreateRenderThreadResources() override;
 	virtual void DestroyRenderThreadResources() override;
 
 private:
 
+	TArray<FXLineBatchElementUserData*> UserDatas;
 	FStaticMeshRenderData* RenderData;
 	UMaterialInterface* Material; 
 	FXLineVertexFactory XLineVertexFactory;

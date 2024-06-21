@@ -5,8 +5,12 @@
 
 // TODO: INSTANCED_STEREO
 
-Buffer<float4> PositionBuffer;
-uint VertexNums;
+// Buffer<float4> PositionBuffer;
+// uint VertexNums;
+
+#ifndef VF_INSTANCED_STEREO_DECLARE_INPUT_BLOCK
+#define VF_INSTANCED_STEREO_DECLARE_INPUT_BLOCK()
+#endif
 
 struct FVertexFactoryInput
 {
@@ -20,7 +24,10 @@ struct FVertexFactoryInput
 struct FPositionOnlyVertexFactoryInput
 {
 	float4 Position : ATTRIBUTE0;
+
+#if MANUAL_VERTEX_FETCH
 	uint   VertexId : SV_VertexID;
+#endif
 
 	VF_INSTANCED_STEREO_DECLARE_INPUT_BLOCK()
 };
@@ -29,7 +36,9 @@ struct FPositionAndNormalOnlyVertexFactoryInput
 {
 	float4 Position : ATTRIBUTE0;
 	float4 Normal   : ATTRIBUTE2;
+#if MANUAL_VERTEX_FETCH
 	uint   VertexId : SV_VertexID;
+#endif
 	
 	VF_INSTANCED_STEREO_DECLARE_INPUT_BLOCK()
 };
@@ -41,6 +50,7 @@ struct FVertexFactoryIntermediates
 	half3x3 TangentToWorld;
 	half    TangentToWorldSign;
 	half4   Color;
+	float3  Position;
 	float4  WorldPosition;
 };
 
@@ -85,6 +95,7 @@ FVertexFactoryIntermediates GetVertexFactoryIntermediates( FVertexFactoryInput I
 {
 	FVertexFactoryIntermediates Intermediates = (FVertexFactoryIntermediates)0;
 	Intermediates.SceneData = VF_GPUSCENE_GET_INTERMEDIATES(Input);
+	Intermediates.Position = Input.Position.xyz;
 	Intermediates.WorldPosition = TransformLocalToTranslatedWorld(Input.Position.xyz);
 	Intermediates.Color = Input.Color FCOLOR_COMPONENT_SWIZZLE;
 
@@ -96,28 +107,33 @@ FVertexFactoryIntermediates GetVertexFactoryIntermediates( FVertexFactoryInput I
 	return Intermediates;
 }
 
-float4 GetCurVertexWorldPosition( uint VertexId )
+half3x3 VertexFactoryGetTangentToLocal( FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates )
 {
-	float4 LocalPosition = PositionBuffer[VertexId];
-	return TransformLocalToTranslatedWorld(LocalPosition.xyz);
+	return Intermediates.TangentToLocal;
 }
 
-float4 GetPrevVertexWorldPosition( uint VertexId )
-{
-	uint PrevIndex = ((floor(VertexId / 2)) - 1) * 2;
-	PrevIndex = max(PrevIndex, 0);
-	float4 LocalPosition = PositionBuffer[PrevIndex];
-	return TransformLocalToTranslatedWorld(LocalPosition.xyz);
-}
-
-float4 GetNextVertexWorldPosition( uint VertexId )
-{
-	uint NextIndex = ((floor(VertexId / 2)) + 1) * 2;
-	uint MaxIndex = (VertexNums / 2) - 1;
-	NextIndex = min(NextIndex, MaxIndex);
-	float4 LocalPosition = PositionBuffer[NextIndex];
-	return TransformLocalToTranslatedWorld(LocalPosition.xyz);
-}
+// float4 GetCurVertexWorldPosition( uint VertexId )
+// {
+// 	float4 LocalPosition = PositionBuffer[VertexId];
+// 	return TransformLocalToTranslatedWorld(LocalPosition.xyz);
+// }
+//
+// float4 GetPrevVertexWorldPosition( uint VertexId )
+// {
+// 	uint PrevIndex = ((floor(VertexId / 2)) - 1) * 2;
+// 	PrevIndex = max(PrevIndex, 0);
+// 	float4 LocalPosition = PositionBuffer[PrevIndex];
+// 	return TransformLocalToTranslatedWorld(LocalPosition.xyz);
+// }
+//
+// float4 GetNextVertexWorldPosition( uint VertexId )
+// {
+// 	uint NextIndex = ((floor(VertexId / 2)) + 1) * 2;
+// 	uint MaxIndex = (VertexNums / 2) - 1;
+// 	NextIndex = min(NextIndex, MaxIndex);
+// 	float4 LocalPosition = PositionBuffer[NextIndex];
+// 	return TransformLocalToTranslatedWorld(LocalPosition.xyz);
+// }
 
 float4 VertexFactoryGetWorldPosition( FPositionOnlyVertexFactoryInput Input )
 {
@@ -134,6 +150,16 @@ float4 VertexFactoryGetWorldPosition( FVertexFactoryInput Input,  FVertexFactory
 	return Intermediates.WorldPosition;
 }
 
+float4 VertexFactoryGetPreviousWorldPosition( FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates )
+{
+#ifdef DFGetX
+	// UE5.4 double float
+#else
+	return mul(float4(Intermediates.Position, 1),
+		LWCMultiplyTranslation(Intermediates.SceneData.InstanceData.PrevLocalToWorld, ResolvedView.PrevPreViewTranslation));
+#endif
+}
+
 float3 VertexFactoryGetWorldNormal( FPositionAndNormalOnlyVertexFactoryInput Input )
 {
 	FSceneDataIntermediates SceneData = VF_GPUSCENE_GET_INTERMEDIATES(Input);
@@ -147,6 +173,32 @@ float3 VertexFactoryGetWorldNormal( FPositionAndNormalOnlyVertexFactoryInput Inp
 float3 VertexFactoryGetWorldNormal( FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates )
 {
 	return Intermediates.TangentToWorld[2];
+}
+
+float4 VertexFactoryGetRasterizedWorldPosition( FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates, float4 InWorldPosition )
+{
+	return InWorldPosition;
+}
+
+FVertexFactoryInterpolantsVSToPS VertexFactoryGetInterpolantsVSToPS( FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates, FMaterialVertexParameters VertexParameters )
+{
+	FVertexFactoryInterpolantsVSToPS Interpolants = (FVertexFactoryInterpolantsVSToPS)0;
+
+	Interpolants.TangentToWorld0 = float4(Intermediates.TangentToLocal[0], 0);
+	Interpolants.TangentToWorld2 = float4(Intermediates.TangentToLocal[2], Intermediates.TangentToWorldSign);
+
+#if USE_WORLDVERTEXNORMAL_CENTER_INTERPOLATION
+#endif
+
+	// TODO: texcoord interpolators
+
+#if INTERPOLATE_VERTEX_COLOR
+	Interpolants.Color = Intermediates.Color;
+#endif
+
+	// TODO: PrimitiveID
+	
+	return Interpolants;
 }
 
 FMaterialVertexParameters GetMaterialVertexParameters(

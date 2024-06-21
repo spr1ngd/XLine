@@ -87,9 +87,11 @@ void UXLineComponent::UpdateLine()
 		{
 			FStaticMeshBuildVertex Vertex;
 			Vertex.Position = FVector3f(MetaPoints[Idx]) + FVector3f(0, 0, 100);
+			Vertex.Color = FColor::Red;
 			StaticMeshBuildVertices[Idx * 2] = Vertex;
 
 			FStaticMeshBuildVertex Vertex2;
+			Vertex2.Color = FColor::Green;
 			Vertex2.Position = FVector3f(MetaPoints[Idx]) + FVector3f(0, 0, -100);
 			StaticMeshBuildVertices[Idx * 2 + 1] = Vertex2;
 		}
@@ -114,16 +116,12 @@ void UXLineComponent::UpdateLine()
 	const int32 LODNum = 1;
 	FStaticMeshRenderData* RenderData = new FStaticMeshRenderData();
 	RenderData->AllocateLODResources(LODNum);
-	{
-		// use custom vertex factory
-		// RenderData->LODVertexFactories[0].VertexFactory = FXLineVertexFactory(GMaxRHIFeatureLevel, &RenderData->LODResources[0].VertexBuffers.PositionVertexBuffer);
-		// RenderData->LODVertexFactories[0].SplineVertexFactory = new FXLineVertexFactory(GMaxRHIFeatureLevel, &RenderData->LODResources[0].VertexBuffers.PositionVertexBuffer);
-	}
 	FStaticMeshLODResources& LOD = RenderData->LODResources[0];
 	LOD.VertexBuffers.StaticMeshVertexBuffer.SetUseFullPrecisionUVs(true);
 	LOD.VertexBuffers.PositionVertexBuffer.Init(StaticMeshBuildVertices, false);
 	const int32 InNumTexCoords = 1;
 	LOD.VertexBuffers.StaticMeshVertexBuffer.Init(StaticMeshBuildVertices, InNumTexCoords, false);
+	LOD.VertexBuffers.ColorVertexBuffer.Init(StaticMeshBuildVertices, false);
 
 	// index buffer
 	{

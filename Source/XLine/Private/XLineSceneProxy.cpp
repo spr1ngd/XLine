@@ -1,6 +1,5 @@
 ﻿#include "XLineSceneProxy.h"
 #include "XLineComponent.h"
-#include "..\Public\XLine.h"
 #include "MaterialDomain.h"
 
 FXLineSceneProxy::FXLineSceneProxy(UXLineComponent* PrimitiveComponent, ERHIFeatureLevel::Type InFeatureLevel)
@@ -25,14 +24,25 @@ void FXLineSceneProxy::DrawStaticElements(FStaticPrimitiveDrawInterface* PDI)
 		const int32 ForceLODIndex = 0;
 		const FStaticMeshLODResources& LODResource = RenderData->LODResources[ForceLODIndex];
 		const FLocalVertexFactory& VertexFactory = XLineVertexFactory;
+
+		// clear 
+		{
+			for( int32 Idx = 0; Idx < UserDatas.Num(); Idx++ )
+			{
+				
+			}	
+		}
 		
 		const int32 SectionNums = LODResource.Sections.Num();
+
+		
+		
 		for( int32 SectionIndex = 0; SectionIndex < SectionNums; SectionIndex++ )
 		{
 			const FStaticMeshSection& Section = LODResource.Sections[SectionIndex];
+			auto* UserData = UserDatas[SectionIndex];
 			if( Section.NumTriangles == 0 )
 			{
-				UE_LOG(LogXLine, Warning, TEXT("Section %d triangles number is zero "), SectionIndex);
 				continue;
 			}
 			FMeshBatch MeshBatch;
@@ -41,10 +51,14 @@ void FXLineSceneProxy::DrawStaticElements(FStaticPrimitiveDrawInterface* PDI)
 			// create mesh batch element
 			{
 				FMeshBatchElement& MeshBatchElement = MeshBatch.Elements[0];
-				// MeshBatchElement.UserData = VertexFactory.GetPositionsSRV();
+				UserData->PositionBuffer = VertexFactory.GetPositionsSRV();
+				UserData->VertexNums     = Section.MaxVertexIndex + 1;
+				MeshBatchElement.UserData = UserData;
 				MeshBatchElement.FirstIndex = Section.FirstIndex;
+				MeshBatchElement.MaxVertexIndex = Section.MaxVertexIndex;
 				MeshBatchElement.IndexBuffer = &LODResource.IndexBuffer;
 				MeshBatchElement.NumPrimitives = Section.NumTriangles;
+				MeshBatchElement.PrimitiveUniformBuffer = GetUniformBuffer();
 			}
 			// material render proxy
 			{
@@ -100,6 +114,9 @@ uint32 FXLineSceneProxy::GetMemoryFootprint() const
 
 void FXLineSceneProxy::CreateRenderThreadResources()
 {
+	const int32 ForceLODIndex = 0;
+    const FStaticMeshLODResources& LODResource = RenderData->LODResources[ForceLODIndex];
+	XLineVertexFactory.InitVertexFactory(&LODResource);
 	XLineVertexFactory.InitResource();
 }
 

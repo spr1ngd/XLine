@@ -1,5 +1,7 @@
 ﻿#include "XLineRenderBuffers.h"
+#include "MaterialDomain.h"
 #include "MeshDrawShaderBindings.h"
+#include "MeshMaterialShader.h"
 
 class FXLineVertexFactoryShaderParameters : public FVertexFactoryShaderParameters
 {
@@ -10,6 +12,7 @@ public:
 	void Bind( const FShaderParameterMap& ParameterMap )
 	{
 		PositionBuffer.Bind(ParameterMap, TEXT("PositionBuffer"));
+		VertexNums.Bind(ParameterMap, TEXT("VertexNums"));
 	}
 
 	void GetElementShaderBindings(
@@ -24,15 +27,23 @@ public:
 		FVertexInputStreamArray& VertexStreams) const
 	{
 		FXLineBatchElementUserData* UserData = (FXLineBatchElementUserData*)BatchElement.UserData;
-		if( UserData->PositionBuffer && PositionBuffer.IsBound() )
+		if( UserData )
 		{
-			ShaderBindings.Add(PositionBuffer, UserData->PositionBuffer);
-		}
+			if( UserData->PositionBuffer && PositionBuffer.IsBound() )
+			{
+				ShaderBindings.Add(PositionBuffer, UserData->PositionBuffer);
+			}
+			if( VertexNums.IsBound() )
+			{
+				ShaderBindings.Add(VertexNums, UserData->VertexNums);
+			}
+		}  
 	}
 
 private:
 
 	LAYOUT_FIELD(FShaderResourceParameter, PositionBuffer);
+	LAYOUT_FIELD(FShaderParameter, VertexNums);
 };
 
 FXLineVertexFactory::FXLineVertexFactory(ERHIFeatureLevel::Type InFeatureLevel)
@@ -41,14 +52,57 @@ FXLineVertexFactory::FXLineVertexFactory(ERHIFeatureLevel::Type InFeatureLevel)
 	
 }
 
-bool FXLineVertexFactory::ShouldCompilePermutation(const FVertexFactoryShaderPermutationParameters& Paramters)
+void FXLineVertexFactory::InitVertexFactory(const FStaticMeshLODResources* LODResources)
 {
-	return false;
+	if( IsInRenderingThread() )
+    {
+    	FLocalVertexFactory::FDataType VertexData;
+    	VertexData.PositionComponent = FVertexStreamComponent(
+    		&LODResources->VertexBuffers.PositionVertexBuffer,
+    		0,
+    		LODResources->VertexBuffers.PositionVertexBuffer.GetStride(),
+    		VET_Float3,
+    		EVertexStreamUsage::Default);
+		VertexData.ColorComponent = FVertexStreamComponent(
+			&LODResources->VertexBuffers.ColorVertexBuffer,
+			0,
+			LODResources->VertexBuffers.ColorVertexBuffer.GetStride(),
+			VET_Color,
+			EVertexStreamUsage::ManualFetch);
+
+		SetData(VertexData);
+		InitResource();
+    }
+    else
+    {
+    	FXLineVertexFactory* VertexFactory = this;
+    	ENQUEUE_RENDER_COMMAND(XLineVertexFactoryInit)([VertexFactory, LODResources]( FRHICommandListImmediate& RHICmdList )
+    	{
+    		VertexFactory->InitVertexFactory(LODResources);
+    	});
+    }
+}
+
+bool FXLineVertexFactory::ShouldCompilePermutation(const FVertexFactoryShaderPermutationParameters& Parameters)
+{
+	return
+		Parameters.MaterialParameters.MaterialDomain == EMaterialDomain::MD_Surface
+	|| Parameters.MaterialParameters.bIsDefaultMaterial
+	|| Parameters.MaterialParameters.bIsSpecialEngineMaterial;  
+}
+
+void FXLineVertexFactory::ModifyCompilationEnvironment(const FVertexFactoryShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
+{
+	
 }
 
 void FXLineVertexFactory::InitRHI()
 {
-	FLocalVertexFactory::InitRHI();
+	// TODO: PositionBuffer 用UserData
+	FVertexDeclarationElementList Elements;
+	Elements.Add(AccessStreamComponent(Data.PositionComponent, 0));
+	Elements.Add(AccessStreamComponent(Data.ColorComponent, 1));
+	InitDeclaration(Elements);
 }
 
 void FXLineVertexFactory::ReleaseRHI()
@@ -58,8 +112,6 @@ void FXLineVertexFactory::ReleaseRHI()
 
 IMPLEMENT_TYPE_LAYOUT(FXLineVertexFactoryShaderParameters);
 IMPLEMENT_VERTEX_FACTORY_PARAMETER_TYPE(FXLineVertexFactory, SF_Vertex, FXLineVertexFactoryShaderParameters);
-IMPLEMENT_VERTEX_FACTORY_TYPE(
-	FXLineVertexFactory,
-	"/Plugin/XLine/Private/XLineVertexFactory.ush",
+IMPLEMENT_VERTEX_FACTORY_TYPE(FXLineVertexFactory, "/Plugin/XLine/Private/XLineVertexFactory.ush",
 	  EVertexFactoryFlags::UsedWithMaterials
 	| EVertexFactoryFlags::SupportsPositionOnly );
