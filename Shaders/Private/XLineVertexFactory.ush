@@ -5,8 +5,9 @@
 
 // TODO: INSTANCED_STEREO
 
-// Buffer<float4> PositionBuffer;
-// uint VertexNums;
+Buffer<float> PositionBuffer;
+Buffer<float> SegmentWidthBuffer;
+uint VertexNums;
 
 #ifndef VF_INSTANCED_STEREO_DECLARE_INPUT_BLOCK
 #define VF_INSTANCED_STEREO_DECLARE_INPUT_BLOCK()
@@ -16,6 +17,7 @@ struct FVertexFactoryInput
 {
 	float4 Position : ATTRIBUTE0;
 	half4  Color    : ATTRIBUTE1;
+	float2 TexCoord	: ATTRIBUTE2;
 	uint   VertexId : SV_VertexID;
 	
 	VF_INSTANCED_STEREO_DECLARE_INPUT_BLOCK()
@@ -24,10 +26,7 @@ struct FVertexFactoryInput
 struct FPositionOnlyVertexFactoryInput
 {
 	float4 Position : ATTRIBUTE0;
-
-#if MANUAL_VERTEX_FETCH
 	uint   VertexId : SV_VertexID;
-#endif
 
 	VF_INSTANCED_STEREO_DECLARE_INPUT_BLOCK()
 };
@@ -36,9 +35,7 @@ struct FPositionAndNormalOnlyVertexFactoryInput
 {
 	float4 Position : ATTRIBUTE0;
 	float4 Normal   : ATTRIBUTE2;
-#if MANUAL_VERTEX_FETCH
 	uint   VertexId : SV_VertexID;
-#endif
 	
 	VF_INSTANCED_STEREO_DECLARE_INPUT_BLOCK()
 };
@@ -52,19 +49,15 @@ struct FVertexFactoryIntermediates
 	half4   Color;
 	float3  Position;
 	float4  WorldPosition;
+	float2  TexCoord;
 };
 
 struct FVertexFactoryInterpolantsVSToPS
 {
 	TANGENTTOWORLD_INTERPOLATOR_BLOCK
 
-#if INTERPOLATE_VERTEX_COLOR
 	half4	Color : COLOR0;
-#endif
-
-#if NUM_TEX_COORD_INTERPOLATORS
-	float4 TexCoords[(NUM_TEX_COORD_INTERPOLATORS+1)/2]  : TEXCOORD0;
-#endif
+	float2  TexCoord : TEXCOORD0;
 };
 
 FPrimitiveSceneData GetPrimitiveData( FVertexFactoryIntermediates Intermediates )
@@ -91,19 +84,204 @@ float4 GetColor(FVertexFactoryInterpolantsVSToPS Interpolants)
 #endif
 }
 
+float2 GetVerticalVector(float2 V)
+{
+	float Radian = PI * 0.5;
+	float2x2 R = float2x2( cos(Radian), -sin(Radian),
+						   sin(Radian),  cos(Radian));
+	return mul(V, R);
+}
+
+// input vector should be normalized
+float2 GetMiddleVector(float2 A, float2 B)
+{
+	float radian = acos(dot(A, B));
+	float s      = sign(cross(float3(A, 0), float3(B, 0)).z);
+	float halfRadian = -s * radian * 0.5;
+	float2x2 R = float2x2( cos(halfRadian), -sin(halfRadian),
+						   sin(halfRadian),  cos(halfRadian));
+	return mul(A, R);
+}
+
+float GetSegmentWidth( uint VertexId )
+{
+	// TODO: read segment width from buffer
+	return 20.f * .5f;
+}
+
+struct FXContext
+{
+	float3 Last;
+	float3 Start;
+	float3 End;
+	float3 Next;
+
+	float4 LastSS;
+	float4 StartSS;
+	float4 EndSS;
+	float4 NextSS;
+	
+	bool bStart;
+	bool bTop;
+	float2 DirectionInScreenSpace;
+	float2 CornerOffset;
+	float2 MiddleDirection; // if bStart true , it's last-start-end, otherwise start-end-next
+	float Radian;
+	float Radian2;
+	float Sign; // cross vector direction
+
+	float3 GetPoint()
+	{
+		return bStart ? Start : End;
+	}
+
+	float4 GetPointSS()
+	{
+		return bStart ? StartSS : EndSS;
+	}
+
+	float2 GetMiddleDirection()
+	{
+		float2 OffsetDirection = MiddleDirection;
+		OffsetDirection *= bTop ? 1 : -1;
+		return OffsetDirection;
+	}
+};
+
+float2 AdaptViewSize( float2 ScreenSpacePosition )
+{
+	float2 ViewSize = ResolvedView.ViewSizeAndInvSize.xy;
+	return ScreenSpacePosition * ViewSize;
+}
+
+float4 TransformLocalToScreenSpace(float3 LocalPosition)
+{
+	// transform local to world
+	float4 TranslatedWorldPosition = TransformLocalToTranslatedWorld(LocalPosition);
+	// transform world to screen space
+	float4 ClipSpacePosition = mul( float4(LWCToFloat(TranslatedWorldPosition).xyz, 1.0), LWCHackToFloat(PrimaryView.TranslatedWorldToClip));
+	float3 NDC = ClipSpacePosition.xyz / ClipSpacePosition.w;
+	float4 ScreenSpacePosition = float4( NDC.x * 0.5 + 0.5, NDC.y * -0.5 + 0.5, NDC.z, ClipSpacePosition.w);
+	ScreenSpacePosition.xy = AdaptViewSize(ScreenSpacePosition.xy);
+	return ScreenSpacePosition;
+}
+
+float4 TransformScreenSpaceToTranslatedWorld(float4 ScreenSpacePosition)
+{
+	float NDCz = ScreenSpacePosition.z;
+	float ClipW = ScreenSpacePosition.w;
+
+	float3 NDC = float3(
+		(ScreenSpacePosition.x - 0.5) * 2,
+		(ScreenSpacePosition.y - 0.5) * -2,
+		NDCz);
+
+	float4 ClipSpacePosition = float4(NDC, 1) * ClipW;
+	return mul(ClipSpacePosition, LWCHackToFloat(PrimaryView.ClipToTranslatedWorld));
+}
+
+float3 GetPositionFromBuffer( uint Index )
+{
+	float3 Position = 0;
+	Position.x = PositionBuffer[Index * 3 + 0];
+	Position.y = PositionBuffer[Index * 3 + 1];
+	Position.z = PositionBuffer[Index * 3 + 2];
+	return Position;
+}
+
+FXContext GetXContext( in uint VertexId, in float XLineWidth )
+{
+	FXContext Context = (FXContext)0;
+	
+	Context.bStart = VertexId % 4 <= 1;
+	Context.bTop   = VertexId % 2 == 0;
+
+	uint GroupIndex = floor(VertexId / 4);
+	uint GroupMinIndex = GroupIndex * 4;
+
+	uint StartIndex = GroupMinIndex;
+	uint EndIndex = StartIndex + 2;
+	
+	uint LastIndex = max(StartIndex - 4, 0);
+	uint NextIndex = min(EndIndex + 4, VertexNums - 1);
+	
+	Context.Last  = GetPositionFromBuffer(LastIndex);
+	Context.Start = GetPositionFromBuffer(StartIndex);
+	Context.End   = GetPositionFromBuffer(EndIndex);
+	Context.Next  = GetPositionFromBuffer(NextIndex);
+
+	Context.LastSS  = TransformLocalToScreenSpace(Context.Last);
+	Context.StartSS = TransformLocalToScreenSpace(Context.Start);
+	Context.EndSS   = TransformLocalToScreenSpace(Context.End);
+	Context.NextSS  = TransformLocalToScreenSpace(Context.Next);
+
+	Context.DirectionInScreenSpace = normalize(Context.EndSS.xy - Context.StartSS.xy);
+
+	if( Context.bStart )
+	{
+		float2 SL = normalize(Context.LastSS.xy - Context.StartSS.xy);
+		float2 SE = normalize(Context.EndSS.xy  - Context.StartSS.xy);
+		float2 Middle = GetMiddleVector(SL, SE); // middle 和 切向量进行夹角计算
+		Context.Radian = clamp(acos(dot(SE, SL)), 0.0001, PI);
+		Context.Sign = sign(cross(float3(SE, 0), float3(SL, 0)).z);
+		Context.MiddleDirection = GetVerticalVector(Context.DirectionInScreenSpace);
+		Context.Radian2 = clamp(acos(dot(Middle, Context.MiddleDirection)), 0.001, PI);
+	}
+	else
+	{
+		float2 ES = normalize(Context.StartSS.xy - Context.EndSS.xy);
+		float2 EN = normalize(Context.NextSS.xy  - Context.EndSS.xy);
+		float2 Middle = GetMiddleVector(ES, EN);
+		Context.Radian = clamp(acos(dot(EN, ES)), 0.0001, PI);
+		Context.Sign = sign(cross(float3(EN, 0), float3(ES, 0)).z);
+		Context.MiddleDirection = GetVerticalVector(Context.DirectionInScreenSpace);
+		Context.Radian2 = clamp(acos(dot(Middle, Context.MiddleDirection)), 0.001, PI);
+	}
+	{
+		float CornerOffset = tan(Context.Radian2) * XLineWidth;
+		CornerOffset = CornerOffset * (Context.bTop ? -1 : 1);
+		CornerOffset = CornerOffset * (Context.bStart ? -1 : 1);
+		float Threshold = ((Context.Radian / PI) * 180) < 30.f ? 0 : 1;
+		CornerOffset *= Threshold;
+		Context.CornerOffset = Context.DirectionInScreenSpace * CornerOffset;
+	}
+	
+	return Context;
+}
+
+float4 GetXLineVertexPosition( in uint VertexId )
+{
+	// todo: how to use different custom data in different section
+	// how to get XLine width
+	// 1. get current / previous / next vertex position
+	// 2. transform point from world space to screen space
+	// 3. calc segments direction in screenspace
+	// 4. calc the vertex position in screen space
+	// 5. transform vertex position from screen space to world space
+	float2 ViewSize = ResolvedView.ViewSizeAndInvSize.xy;
+	float2 TexelSize = ResolvedView.ViewSizeAndInvSize.zw;
+	float Width = GetSegmentWidth(VertexId);
+	FXContext Context = GetXContext(VertexId, Width);
+	float2 OffsetDirection = Context.GetMiddleDirection();
+	float4 ScreenSpacePosition = Context.GetPointSS();
+	float2 PixelSpacePosition = ScreenSpacePosition.xy;
+	float2 Offset = OffsetDirection * GetSegmentWidth(VertexId);
+	Offset += Context.CornerOffset;
+	PixelSpacePosition.xy += Offset;
+	ScreenSpacePosition.xy = PixelSpacePosition * TexelSize;
+	float4 TranslatedWorldPosition = TransformScreenSpaceToTranslatedWorld(ScreenSpacePosition);
+	return TranslatedWorldPosition;
+}
+
 FVertexFactoryIntermediates GetVertexFactoryIntermediates( FVertexFactoryInput Input )
 {
+	Input.Color = float4(0,0,0,1);
 	FVertexFactoryIntermediates Intermediates = (FVertexFactoryIntermediates)0;
 	Intermediates.SceneData = VF_GPUSCENE_GET_INTERMEDIATES(Input);
 	Intermediates.Position = Input.Position.xyz;
-	Intermediates.WorldPosition = TransformLocalToTranslatedWorld(Input.Position.xyz);
+	Intermediates.WorldPosition = GetXLineVertexPosition(Input.VertexId);
 	Intermediates.Color = Input.Color FCOLOR_COMPONENT_SWIZZLE;
-
-	float TangentSign = 1.0;
-	// TODO:
-	// Intermediates.TangentToLocal
-	// Intermediates.TangentToWorld
-	// Intermediates.TangentToWorldSign
+	Intermediates.TexCoord.xy = Input.TexCoord;
 	return Intermediates;
 }
 
@@ -112,37 +290,16 @@ half3x3 VertexFactoryGetTangentToLocal( FVertexFactoryInput Input, FVertexFactor
 	return Intermediates.TangentToLocal;
 }
 
-// float4 GetCurVertexWorldPosition( uint VertexId )
-// {
-// 	float4 LocalPosition = PositionBuffer[VertexId];
-// 	return TransformLocalToTranslatedWorld(LocalPosition.xyz);
-// }
-//
-// float4 GetPrevVertexWorldPosition( uint VertexId )
-// {
-// 	uint PrevIndex = ((floor(VertexId / 2)) - 1) * 2;
-// 	PrevIndex = max(PrevIndex, 0);
-// 	float4 LocalPosition = PositionBuffer[PrevIndex];
-// 	return TransformLocalToTranslatedWorld(LocalPosition.xyz);
-// }
-//
-// float4 GetNextVertexWorldPosition( uint VertexId )
-// {
-// 	uint NextIndex = ((floor(VertexId / 2)) + 1) * 2;
-// 	uint MaxIndex = (VertexNums / 2) - 1;
-// 	NextIndex = min(NextIndex, MaxIndex);
-// 	float4 LocalPosition = PositionBuffer[NextIndex];
-// 	return TransformLocalToTranslatedWorld(LocalPosition.xyz);
-// }
-
 float4 VertexFactoryGetWorldPosition( FPositionOnlyVertexFactoryInput Input )
 {
-	return TransformLocalToTranslatedWorld(Input.Position.xyz);
+	// return TransformLocalToTranslatedWorld(Input.Position.xyz);
+	return GetXLineVertexPosition(Input.VertexId);
 }
 
 float4 VertexFactoryGetWorldPosition( FPositionAndNormalOnlyVertexFactoryInput Input )
 {
-	return TransformLocalToTranslatedWorld(Input.Position.xyz);
+	// return TransformLocalToTranslatedWorld(Input.Position.xyz);
+	return GetXLineVertexPosition(Input.VertexId);
 }
 
 float4 VertexFactoryGetWorldPosition( FVertexFactoryInput Input,  FVertexFactoryIntermediates Intermediates )
@@ -177,8 +334,21 @@ float3 VertexFactoryGetWorldNormal( FVertexFactoryInput Input, FVertexFactoryInt
 
 float4 VertexFactoryGetRasterizedWorldPosition( FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates, float4 InWorldPosition )
 {
-	return InWorldPosition;
+	return Intermediates.WorldPosition;
 }
+
+
+#if NUM_TEX_COORD_INTERPOLATORS
+float2 GetUV(FVertexFactoryInterpolantsVSToPS Interpolants, int UVIndex)
+{
+	return Interpolants.TexCoord;
+}
+
+void SetUV(inout FVertexFactoryInterpolantsVSToPS Interpolants, int UVIndex, float2 InValue)
+{
+	Interpolants.TexCoord = InValue;
+}
+#endif
 
 FVertexFactoryInterpolantsVSToPS VertexFactoryGetInterpolantsVSToPS( FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates, FMaterialVertexParameters VertexParameters )
 {
@@ -189,15 +359,8 @@ FVertexFactoryInterpolantsVSToPS VertexFactoryGetInterpolantsVSToPS( FVertexFact
 
 #if USE_WORLDVERTEXNORMAL_CENTER_INTERPOLATION
 #endif
-
-	// TODO: texcoord interpolators
-
-#if INTERPOLATE_VERTEX_COLOR
+	Interpolants.TexCoord = Intermediates.TexCoord;
 	Interpolants.Color = Intermediates.Color;
-#endif
-
-	// TODO: PrimitiveID
-	
 	return Interpolants;
 }
 
@@ -212,33 +375,9 @@ FMaterialVertexParameters GetMaterialVertexParameters(
 	Result.SceneData = Intermediates.SceneData;
 	Result.WorldPosition = WorldPosition;
 	Result.VertexColor = Intermediates.Color;
-
-	#if NUM_MATERIAL_TEXCOORDS_VERTEX
-		#if NUM_MATERIAL_TEXCOORDS_VERTEX > 0
-			Result.TexCoords[0] = Input.TexCoords0.xy;
-		#endif
-		#if NUM_MATERIAL_TEXCOORDS_VERTEX > 1
-			Result.TexCoords[1] = Input.TexCoords0.zw;
-		#endif
-		#if NUM_MATERIAL_TEXCOORDS_VERTEX > 2
-			Result.TexCoords[2] = Input.TexCoords1.xy;
-		#endif
-		#if NUM_MATERIAL_TEXCOORDS_VERTEX > 3
-			Result.TexCoords[3] = Input.TexCoords1.zw;
-		#endif
-		#if NUM_MATERIAL_TEXCOORDS_VERTEX > 4
-			Result.TexCoords[4] = Input.TexCoords2.xy;
-		#endif
-		#if NUM_MATERIAL_TEXCOORDS_VERTEX > 5
-			Result.TexCoords[5] = Input.TexCoords2.zw;
-		#endif
-		#if NUM_MATERIAL_TEXCOORDS_VERTEX > 6
-			Result.TexCoords[6] = Input.TexCoords3.xy;
-		#endif
-		#if NUM_MATERIAL_TEXCOORDS_VERTEX > 7
-			Result.TexCoords[7] = Input.TexCoords3.zw;
-		#endif
-	#endif
+#if NUM_MATERIAL_TEXCOORDS_VERTEX
+	Result.TexCoords[0] = Input.TexCoord.xy;
+#endif
 
 #if ENABLE_NEW_HLSL_GENERATOR
 	EvaluateVertexMaterialAttributes(Result);
@@ -253,18 +392,13 @@ FMaterialPixelParameters GetMaterialPixelParameters(
 {
 	FMaterialPixelParameters Result = (FMaterialPixelParameters)0;
 
-#if NUM_TEX_COORD_INTERPOLATORS
-	UNROLL
-	for( int CoordinateIndex = 0; CoordinateIndex < NUM_TEX_COORD_INTERPOLATORS; CoordinateIndex++ )
-	{
-		Result.TexCoords[CoordinateIndex] = GetUV(Interpolants, CoordinateIndex);
-	}
-#endif
-
 	half3 TangentToWorld0 = GetTangentToWorld0(Interpolants).xyz;
 	half4 TangentToWorld2 = GetTangentToWorld2(Interpolants);
 	Result.UnMirrored = TangentToWorld2.w;
 	Result.VertexColor = GetColor(Interpolants);
+#if NUM_TEX_COORD_INTERPOLATORS
+	Result.TexCoords[0] = Interpolants.TexCoord;
+#endif
 	Result.TangentToWorld = AssembleTangentToWorld( TangentToWorld0, TangentToWorld2 );
 
 #if USE_WORLDVERTEXNORMAL_CENTER_INTERPOLATION
@@ -277,3 +411,5 @@ FMaterialPixelParameters GetMaterialPixelParameters(
 
 	return Result;
 }
+
+#include "/Engine/Private/VertexFactoryDefaultInterface.ush"

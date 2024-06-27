@@ -3,6 +3,7 @@
 struct FXLineBatchElementUserData
 {
 	FRHIShaderResourceView* PositionBuffer;
+	FRHIShaderResourceView* SegmentWidthBuffer;
 	uint32 VertexNums;
 };
 

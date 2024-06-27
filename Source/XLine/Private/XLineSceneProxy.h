@@ -24,9 +24,10 @@ protected:
 
 private:
 
+	
+
 	TArray<FXLineBatchElementUserData*> UserDatas;
 	FStaticMeshRenderData* RenderData;
 	UMaterialInterface* Material; 
 	FXLineVertexFactory XLineVertexFactory;
-	
 };

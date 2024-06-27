@@ -13,6 +13,7 @@ AXLineActor::AXLineActor( const FObjectInitializer& ObjectInitializer ) : Super(
 	XLineComponent->Mobility = EComponentMobility::Movable;
 	XLineComponent->SetGenerateOverlapEvents(false);
 	XLineComponent->bUseDefaultCollision = false;
+	XLineComponent->bNeverOcclusionCulling = true;
 	XLineComponent->RegisterComponent();
 
 	RootComponent = XLineComponent;

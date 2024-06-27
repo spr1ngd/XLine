@@ -15,6 +15,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	TArray<FVector> MetaPoints;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	float Width = 1.0f;
+
 	virtual ~UXLineComponent();
 	
 	virtual FPrimitiveSceneProxy* CreateSceneProxy() override;

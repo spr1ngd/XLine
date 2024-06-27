@@ -29,18 +29,17 @@ void FXLineSceneProxy::DrawStaticElements(FStaticPrimitiveDrawInterface* PDI)
 		{
 			for( int32 Idx = 0; Idx < UserDatas.Num(); Idx++ )
 			{
-				
-			}	
+				delete UserDatas[Idx];				
+			}
+			UserDatas.Empty();
 		}
 		
 		const int32 SectionNums = LODResource.Sections.Num();
-
-		
 		
 		for( int32 SectionIndex = 0; SectionIndex < SectionNums; SectionIndex++ )
 		{
 			const FStaticMeshSection& Section = LODResource.Sections[SectionIndex];
-			auto* UserData = UserDatas[SectionIndex];
+			FXLineBatchElementUserData* UserData = new (UserDatas) FXLineBatchElementUserData;
 			if( Section.NumTriangles == 0 )
 			{
 				continue;
@@ -52,7 +51,8 @@ void FXLineSceneProxy::DrawStaticElements(FStaticPrimitiveDrawInterface* PDI)
 			{
 				FMeshBatchElement& MeshBatchElement = MeshBatch.Elements[0];
 				UserData->PositionBuffer = VertexFactory.GetPositionsSRV();
-				UserData->VertexNums     = Section.MaxVertexIndex + 1;
+				UserData->PositionBuffer = LODResource.VertexBuffers.PositionVertexBuffer.GetSRV();
+				UserData->VertexNums = Section.MaxVertexIndex;
 				MeshBatchElement.UserData = UserData;
 				MeshBatchElement.FirstIndex = Section.FirstIndex;
 				MeshBatchElement.MaxVertexIndex = Section.MaxVertexIndex;

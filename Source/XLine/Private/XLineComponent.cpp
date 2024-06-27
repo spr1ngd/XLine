@@ -77,33 +77,63 @@ void UXLineComponent::UpdateLine()
 	}
 	
 	TArray<FStaticMeshBuildVertex> StaticMeshBuildVertices;
-	StaticMeshBuildVertices.SetNumUninitialized(MetaPoints.Num() * 2);
+	StaticMeshBuildVertices.SetNumUninitialized((MetaPoints.Num() - 1) * 4);
 	TArray<uint32> StaticMeshIndices;
 	StaticMeshIndices.SetNumZeroed((MetaPoints.Num() - 1) * 6);
+
+	float TotalLength = 0.0f;
+	{
+		for( int32 Idx = 0; Idx < MetaPoints.Num() - 1; Idx++ )
+		{
+			float Length = FVector::Dist(MetaPoints[Idx], MetaPoints[Idx + 1]);
+			TotalLength += Length;
+		}
+	}
 	
 	// generate x-line vertices
 	{
-		for( int32 Idx = 0; Idx < MetaPoints.Num(); Idx++ )
+		float AccLength = 0.0f;
+		for( int32 Idx = 0; Idx < MetaPoints.Num() - 1; Idx++ )
 		{
-			FStaticMeshBuildVertex Vertex;
-			Vertex.Position = FVector3f(MetaPoints[Idx]) + FVector3f(0, 0, 100);
-			Vertex.Color = FColor::Red;
-			StaticMeshBuildVertices[Idx * 2] = Vertex;
+			float StartU = AccLength / TotalLength;
+			float EndU = 0.0f;
+			float Length = FVector::Dist(MetaPoints[Idx], MetaPoints[Idx + 1]);
+			AccLength += Length;
+			EndU = AccLength / TotalLength;
+			
+			FStaticMeshBuildVertex Vertex0;
+			Vertex0.Position = FVector3f(MetaPoints[Idx]);
+			Vertex0.Color = FColor::White;
+			Vertex0.UVs[0] = FVector2f(StartU, 0);
+			StaticMeshBuildVertices[Idx * 4] = Vertex0;
+
+			FStaticMeshBuildVertex Vertex1;
+			Vertex1.Position = FVector3f(MetaPoints[Idx]);
+			Vertex1.Color = FColor::White;
+			Vertex1.UVs[0] = FVector2f(StartU, 1);
+			StaticMeshBuildVertices[Idx * 4 + 1] = Vertex1;
 
 			FStaticMeshBuildVertex Vertex2;
-			Vertex2.Color = FColor::Green;
-			Vertex2.Position = FVector3f(MetaPoints[Idx]) + FVector3f(0, 0, -100);
-			StaticMeshBuildVertices[Idx * 2 + 1] = Vertex2;
+			Vertex2.Color = FColor::White;
+			Vertex2.UVs[0] = FVector2f(EndU, 0);
+			Vertex2.Position = FVector3f(MetaPoints[Idx + 1]);
+			StaticMeshBuildVertices[Idx * 4 + 2] = Vertex2;
+
+			FStaticMeshBuildVertex Vertex3;
+            Vertex3.Color = FColor::White;
+			Vertex3.UVs[0] = FVector2f(EndU, 1);
+            Vertex3.Position = FVector3f(MetaPoints[Idx + 1]);
+            StaticMeshBuildVertices[Idx * 4 + 3] = Vertex3;
 		}
 
 		// vertex layout
-		// 0 --- 2
-		// |  x  |
-		// 1 --- 3
+		// 0 --- 2 4 --- 6
+		// |  x  | |  x  |
+		// 1 --- 3 5 --- 7
 		for( int32 Idx = 0; Idx < MetaPoints.Num() - 1; Idx++ )
 		{
 			const int32 BaseIndex = Idx * 6;
-			const int32 BaseVertexIndex = Idx * 2;
+			const int32 BaseVertexIndex = Idx * 4;
 			StaticMeshIndices[BaseIndex + 0] = BaseVertexIndex + 0;
 			StaticMeshIndices[BaseIndex + 1] = BaseVertexIndex + 1;
 			StaticMeshIndices[BaseIndex + 2] = BaseVertexIndex + 3;
@@ -121,6 +151,7 @@ void UXLineComponent::UpdateLine()
 	LOD.VertexBuffers.PositionVertexBuffer.Init(StaticMeshBuildVertices, false);
 	const int32 InNumTexCoords = 1;
 	LOD.VertexBuffers.StaticMeshVertexBuffer.Init(StaticMeshBuildVertices, InNumTexCoords, false);
+	LOD.bHasColorVertexData = true;
 	LOD.VertexBuffers.ColorVertexBuffer.Init(StaticMeshBuildVertices, false);
 
 	// index buffer
@@ -145,7 +176,6 @@ void UXLineComponent::UpdateLine()
 	{
 		LineMesh = NewObject<UStaticMesh>(this);
 		LineMesh->SetFlags(RF_Transient | RF_DuplicateTransient);
-		LineMesh->NaniteSettings.bEnabled = false;
 		LineMesh->SetRenderData(TUniquePtr<FStaticMeshRenderData>(RenderData));
 		LineMesh->AddMaterial(Material);
 		LineMesh->InitResources();
@@ -166,7 +196,7 @@ void UXLineComponent::PostLoad()
 
 void UXLineComponent::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
 {
-	FProperty* PropertyThatChanged = PropertyChangedEvent.Property;
+	FProperty* PropertyThatChanged = PropertyChangedEvent.MemberProperty;
 	if( PropertyThatChanged )
 	{
 		auto PropertyName = PropertyThatChanged->GetName();

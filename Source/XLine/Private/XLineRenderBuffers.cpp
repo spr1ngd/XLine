@@ -70,6 +70,15 @@ void FXLineVertexFactory::InitVertexFactory(const FStaticMeshLODResources* LODRe
 			VET_Color,
 			EVertexStreamUsage::ManualFetch);
 
+		FVertexStreamComponent TexCoord0 = FVertexStreamComponent(
+			&LODResources->VertexBuffers.StaticMeshVertexBuffer.TexCoordVertexBuffer,
+			0,
+			sizeof(FVector2f),
+			VET_Float2,
+			EVertexStreamUsage::ManualFetch
+		);
+		VertexData.TextureCoordinates.Emplace(TexCoord0);
+		
 		SetData(VertexData);
 		InitResource();
     }
@@ -86,9 +95,10 @@ void FXLineVertexFactory::InitVertexFactory(const FStaticMeshLODResources* LODRe
 bool FXLineVertexFactory::ShouldCompilePermutation(const FVertexFactoryShaderPermutationParameters& Parameters)
 {
 	return
-		Parameters.MaterialParameters.MaterialDomain == EMaterialDomain::MD_Surface
-	|| Parameters.MaterialParameters.bIsDefaultMaterial
-	|| Parameters.MaterialParameters.bIsSpecialEngineMaterial;  
+		(!Parameters.MaterialParameters.bIsUsedWithInstancedStaticMeshes)
+		&& Parameters.MaterialParameters.MaterialDomain == EMaterialDomain::MD_Surface
+		|| Parameters.MaterialParameters.bIsDefaultMaterial
+		|| Parameters.MaterialParameters.bIsSpecialEngineMaterial;
 }
 
 void FXLineVertexFactory::ModifyCompilationEnvironment(const FVertexFactoryShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
@@ -102,6 +112,7 @@ void FXLineVertexFactory::InitRHI()
 	FVertexDeclarationElementList Elements;
 	Elements.Add(AccessStreamComponent(Data.PositionComponent, 0));
 	Elements.Add(AccessStreamComponent(Data.ColorComponent, 1));
+	Elements.Add(AccessStreamComponent(Data.TextureCoordinates[0], 2));
 	InitDeclaration(Elements);
 }
 
